@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from "react";
 import { Calendar, Hash, Type, Download, Pencil } from "lucide-react";
 import { toPng } from "html-to-image";
 import ChartGrid from "../charts/ChartGrid";
+import { reorderCharts } from "../services/api";
 import { TOKENS } from "./theme";
 import DashboardEditor from "./DashboardEditor";
 
@@ -69,11 +70,7 @@ export default function DashboardView({ dashboard, onUpdate }) {
     setCurrent(updated);
     if (onUpdate) onUpdate(updated);
     try {
-      await fetch(`http://127.0.0.1:8000/api/dashboards/${current.id}/charts-reorder`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ charts: newCharts }),
-      });
+      await reorderCharts(current.id, newCharts);
     } catch (e) {
       console.error("Gagal simpan urutan chart:", e);
     }

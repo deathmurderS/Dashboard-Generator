@@ -139,3 +139,32 @@ class AddChartRequest(BaseModel):
 class UpdateKpisRequest(BaseModel):
     """Body untuk PATCH /api/dashboards/{id}/kpis"""
     kpis: list[KPICard]
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    name: str | None = None
+
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

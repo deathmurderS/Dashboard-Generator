@@ -4,9 +4,8 @@
 
 import React, { useState, useEffect } from "react";
 import { Trash2, Pencil, Plus, X, Check, Save } from "lucide-react";
+import { addChart, deleteChart, getDashboard, reorderCharts, updateKpis } from "../services/api";
 import { TOKENS } from "./theme";
-
-const API = "http://127.0.0.1:8000";
 
 const CHART_TYPES = [
   { value: "bar",         label: "Bar",          desc: "Batang vertikal" },
@@ -399,29 +398,27 @@ function AddKpiForm({ dashboard, onAdd, onClose }) {
     } catch { return null; }
   })();
 
-  function handleAdd() {
-    if (!label.trim()) { setError("Label wajib diisi."); return; }
+  async function handleAdd() {
+    if (!addAll && !label.trim()) { setError("Label wajib diisi."); return; }
     const value = computeValue();
     if (isNaN(value)) { setError("Tidak bisa hitung nilai — lengkapi pilihan atau input manual."); return; }
 
     if (addAll && kpiType === "count" && catCol) {
-      uniqueCountValues.forEach((val) => {
-        onAdd({
+      await onAdd(uniqueCountValues.map((val) => ({
           id: `kpi_${Math.random().toString(36).slice(2, 8)}`,
           label: val,
           value: countForValue(val),
           type: kpiType,
-        });
-      });
+        }))
+      );
     } else {
-      onAdd({
+      await onAdd({
         id: `kpi_${Math.random().toString(36).slice(2, 8)}`,
         label: label.trim(),
         value: Math.round(value * 100) / 100,
         type: kpiType,
       });
     }
-    onClose();
   }
 
   return (
@@ -884,43 +881,29 @@ export default function DashboardEditor({ dashboard, onUpdate, onClose }) {
 
       for (const id of originalChartIds) {
         if (!currentChartIds.has(id)) {
-          await fetch(`${API}/api/dashboards/${dashboard.id}/charts/${id}`, { method: "DELETE" });
+          await deleteChart(dashboard.id, id);
         }
       }
 
       for (const chart of charts) {
         if (!originalChartIds.has(chart.id)) {
-          await fetch(`${API}/api/dashboards/${dashboard.id}/charts`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              type: chart.type,
-              title: chart.title,
-              x_label: chart.x_label ?? null,
-              y_label: chart.y_label ?? null,
-              data: chart.data,
-              stack_categories: chart.stack_categories ?? null,
-              granularities: chart.granularities ?? null,
-              active_granularity: chart.active_granularity ?? null,
-            }),
+          await addChart(dashboard.id, {
+            type: chart.type,
+            title: chart.title,
+            x_label: chart.x_label ?? null,
+            y_label: chart.y_label ?? null,
+            data: chart.data,
+            stack_categories: chart.stack_categories ?? null,
+            granularities: chart.granularities ?? null,
+            active_granularity: chart.active_granularity ?? null,
           });
         }
       }
 
-      await fetch(`${API}/api/dashboards/${dashboard.id}/charts-reorder`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ charts }),
-      });
+      await reorderCharts(dashboard.id, charts);
+      await updateKpis(dashboard.id, kpis);
 
-      await fetch(`${API}/api/dashboards/${dashboard.id}/kpis`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kpis }),
-      });
-
-      const finalRes  = await fetch(`${API}/api/dashboards/${dashboard.id}`);
-      const finalData = await finalRes.json();
+      const finalData = await getDashboard(dashboard.id);
       onUpdate(finalData);
       onClose();
     } catch (e) {

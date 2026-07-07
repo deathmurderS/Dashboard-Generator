@@ -9,7 +9,7 @@ function formatDate(iso) {
   catch { return iso; }
 }
 
-export default function SavedDashboards({ onBack }) {
+export default function SavedDashboards() {
   const [items, setItems]         = useState([]);
   const [status, setStatus]       = useState("loading");
   const [error, setError]         = useState("");
@@ -39,8 +39,7 @@ export default function SavedDashboards({ onBack }) {
   };
 
   return (
-    <div style={{ background: TOKENS.bg, color: TOKENS.text, fontFamily: "Inter, sans-serif", minHeight: "100vh" }}>
-      {/* ── Top bar ── */}
+    <div style={{ background: TOKENS.bg, color: TOKENS.text, fontFamily: "Inter, sans-serif", minHeight: "100%" }}>
       <div style={{
         borderBottom: `1px solid ${TOKENS.border}`,
         background: TOKENS.panel,
@@ -49,20 +48,22 @@ export default function SavedDashboards({ onBack }) {
         height: 56,
         position: "sticky", top: 0, zIndex: 50,
       }}>
-        <button onClick={() => selected ? setSelected(null) : onBack?.()} style={{
-          border: `1px solid ${TOKENS.border}`, color: TOKENS.textMuted,
-          background: "transparent", borderRadius: 7, padding: 6,
-          cursor: "pointer", display: "flex", alignItems: "center",
-        }}>
-          <ArrowLeft size={16} />
-        </button>
+        {selected && (
+          <button onClick={() => setSelected(null)} style={{
+            border: `1px solid ${TOKENS.border}`, color: TOKENS.textMuted,
+            background: "transparent", borderRadius: 7, padding: 6,
+            cursor: "pointer", display: "flex", alignItems: "center",
+          }}>
+            <ArrowLeft size={16} />
+          </button>
+        )}
         <span style={{
           color: TOKENS.accent, fontFamily: "'JetBrains Mono', monospace",
           fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em",
           border: `1px solid ${TOKENS.accent}44`, borderRadius: 4, padding: "2px 8px",
-        }}>PHASE 2</span>
+        }}>SAVED</span>
         <span style={{ color: TOKENS.text, fontWeight: 700, fontSize: 15 }}>
-          {selected ? selected.title : "Dashboard Tersimpan"}
+          {selected ? selected.title : "Dashboard Saya"}
         </span>
       </div>
 

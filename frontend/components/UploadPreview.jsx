@@ -1,39 +1,13 @@
 import React, { useCallback, useRef, useState } from "react";
 import {
   UploadCloud, FileSpreadsheet, X, AlertTriangle,
-  Save, Check, ListChecks, ChevronRight, Layers,
+  Save, Check, ChevronRight, Layers,
 } from "lucide-react";
-import { saveDashboard, ApiError } from "../services/api";
+import { saveDashboard, detectSheets, uploadSheets, ApiError } from "../services/api";
 import DashboardView from "./DashboardView";
 import { TOKENS } from "./theme";
 
-const API = "http://127.0.0.1:8000";
 const MAX_FILE_MB = 25;
-
-// ─── Upload helper (ganti uploadDataset lama) ─────────────────────────────
-async function uploadSheets(file, sheetNames) {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("sheets", sheetNames.join(","));
-
-  const res = await fetch(`${API}/api/upload`, { method: "POST", body: form });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Upload gagal." }));
-    throw new Error(err.detail ?? "Upload gagal.");
-  }
-  return res.json(); // list[UploadResponse]
-}
-
-async function detectSheets(file) {
-  const form = new FormData();
-  form.append("file", file);
-  const res = await fetch(`${API}/api/detect-sheets`, { method: "POST", body: form });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Gagal membaca file." }));
-    throw new Error(err.detail ?? "Gagal membaca file.");
-  }
-  return res.json(); // { sheets, is_multi_sheet, filename, ... }
-}
 
 // ─── Komponen pilih sheet ─────────────────────────────────────────────────
 function SheetSelector({ sheets, selected, onChange }) {
@@ -129,10 +103,11 @@ function SheetTabs({ dashboards, activeIdx, onChange }) {
 }
 
 // ─── Komponen utama ────────────────────────────────────────────────────────
-export default function UploadPreview({ onViewSaved }) {
+export default function UploadPreview() {
   const [status, setStatus]           = useState("idle");      // idle | detecting | sheet_select | scanning | ready | error
   const [fileMeta, setFileMeta]       = useState(null);
   const [fileObj, setFileObj]         = useState(null);
+  const [datasetId, setDatasetId]     = useState("");
   const [sheets, setSheets]           = useState([]);
   const [selectedSheets, setSelected] = useState([]);
   const [dashboards, setDashboards]   = useState([]);          // list hasil per sheet
@@ -164,12 +139,13 @@ export default function UploadPreview({ onViewSaved }) {
 
     try {
       const info = await detectSheets(file);
+      setDatasetId(info.dataset_id || "");
       setSheets(info.sheets);
       setSelected(info.sheets); // default: semua dipilih
 
       if (!info.is_multi_sheet) {
         // CSV atau Excel 1 sheet — langsung proses
-        await processSheets(file, info.sheets);
+        await processSheets(file, info.sheets, info.dataset_id || "");
       } else {
         setStatus("sheet_select");
       }
@@ -180,11 +156,16 @@ export default function UploadPreview({ onViewSaved }) {
   }, []);
 
   // ── Step 2: proses sheet terpilih ──
-  async function processSheets(file, sheetNames) {
+  async function processSheets(file, sheetNames, currentDatasetId = datasetId) {
     setStatus("scanning");
     try {
       const start = performance.now();
-      const results = await uploadSheets(file, sheetNames);
+      const results = await uploadSheets({
+        file: currentDatasetId ? null : file,
+        sheetNames,
+        datasetId: currentDatasetId,
+        filename: file?.name || fileMeta?.name || "",
+      });
       const elapsed = performance.now() - start;
       await new Promise((r) => setTimeout(r, Math.max(0, 400 - elapsed)));
       setDashboards(results);
@@ -209,6 +190,7 @@ export default function UploadPreview({ onViewSaved }) {
 
   const reset = () => {
     setStatus("idle"); setFileMeta(null); setFileObj(null);
+    setDatasetId("");
     setSheets([]); setSelected([]); setDashboards([]);
     setActiveTab(0); setSaveStates({}); setError("");
     if (inputRef.current) inputRef.current.value = "";
@@ -238,13 +220,12 @@ export default function UploadPreview({ onViewSaved }) {
   const allSaved = dashboards.length > 0 && dashboards.every((_, i) => saveStates[i] === "saved");
 
   return (
-    <div style={{ background: TOKENS.bg, color: TOKENS.text, fontFamily: "Inter, sans-serif", minHeight: "100vh" }}>
-      {/* ── Top bar ── */}
+    <div style={{ background: TOKENS.bg, color: TOKENS.text, fontFamily: "Inter, sans-serif", minHeight: "100%" }}>
       <div style={{
         borderBottom: `1px solid ${TOKENS.border}`,
         background: TOKENS.panel,
         padding: "0 32px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
+        display: "flex", alignItems: "center",
         height: 56,
         position: "sticky", top: 0, zIndex: 50,
       }}>
@@ -254,21 +235,12 @@ export default function UploadPreview({ onViewSaved }) {
             fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em",
             border: `1px solid ${TOKENS.accent}44`, borderRadius: 4, padding: "2px 8px",
           }}>
-            PHASE 1+2
+            UPLOAD
           </span>
           <span style={{ color: TOKENS.text, fontWeight: 700, fontSize: 15 }}>
-            KPI AI Dashboard Generator
+            Analisis Data Baru
           </span>
         </div>
-        {onViewSaved && (
-          <button onClick={onViewSaved} style={{
-            border: `1px solid ${TOKENS.border}`, color: TOKENS.textMuted,
-            background: "transparent", borderRadius: 7, padding: "6px 14px",
-            fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-          }}>
-            <ListChecks size={14} /> Dashboard tersimpan
-          </button>
-        )}
       </div>
 
       {/* ── Konten ── */}

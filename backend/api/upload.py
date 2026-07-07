@@ -7,14 +7,18 @@ POST /api/upload          — proses satu sheet jadi dashboard payload
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from typing import Annotated
 
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+
+from auth.deps import get_current_user
+from models.db_models import User
 from models.schemas import UploadResponse
 from services.dashboard_service import build_dashboard_payload
 from services.file_service import (
     FileValidationError,
     detect_sheets,
+    load_raw_file,
     parse_dataset,
     save_raw_file,
     validate_file,
@@ -24,7 +28,10 @@ router = APIRouter(prefix="/api", tags=["upload"])
 
 
 @router.post("/detect-sheets")
-async def detect_sheets_endpoint(file: UploadFile = File(...)) -> dict:
+async def detect_sheets_endpoint(
+    file: UploadFile = File(...),
+    _user: User = Depends(get_current_user),
+) -> dict:
     """
     Terima file, return daftar nama sheet.
     CSV selalu return ["Sheet1"].
@@ -52,9 +59,11 @@ async def detect_sheets_endpoint(file: UploadFile = File(...)) -> dict:
 
 @router.post("/upload", response_model=list[UploadResponse])
 async def upload_dataset(
-    file: UploadFile = File(...),
-    sheets: Annotated[str, Form()] = "",          # "Sheet1,Sheet2,Sheet3" — kosong = semua
-    dataset_id: Annotated[str, Form()] = "",      # dari detect-sheets, opsional
+    file: UploadFile | None = File(default=None),
+    sheets: Annotated[str, Form()] = "",
+    dataset_id: Annotated[str, Form()] = "",
+    filename: Annotated[str, Form()] = "",
+    _user: User = Depends(get_current_user),
 ) -> list[UploadResponse]:
     """
     Proses satu atau lebih sheet dari file yang diupload.
@@ -63,10 +72,22 @@ async def upload_dataset(
     Kalau `sheets` kosong: proses semua sheet.
     Kalau `sheets` diisi: proses hanya sheet yang disebutkan.
     """
-    content = await file.read()
-
     try:
-        ext = validate_file(file.filename, len(content))
+        if dataset_id.strip():
+            saved_id = dataset_id.strip()
+            content, ext = load_raw_file(saved_id)
+            source_filename = filename.strip() or f"{saved_id}{ext}"
+        else:
+            if file is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Kirim file atau dataset_id untuk diproses.",
+                )
+            content = await file.read()
+            ext = validate_file(file.filename, len(content))
+            saved_id, _ = save_raw_file(content, file.filename)
+            source_filename = file.filename
+
         all_sheets = detect_sheets(content, ext)
     except FileValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -85,9 +106,6 @@ async def upload_dataset(
     else:
         target_sheets = all_sheets
 
-    # Simpan file raw sekali
-    saved_id, _ = save_raw_file(content, file.filename)
-
     results: list[UploadResponse] = []
     for sheet in target_sheets:
         sheet_name_arg = None if ext == ".csv" else sheet
@@ -99,8 +117,8 @@ async def upload_dataset(
 
         # Buat filename yang mencerminkan sheet
         display_name = (
-            file.filename if len(target_sheets) == 1
-            else f"{file.filename} [{sheet}]"
+            source_filename if len(target_sheets) == 1
+            else f"{source_filename} [{sheet}]"
         )
 
         payload = build_dashboard_payload(

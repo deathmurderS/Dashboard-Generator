@@ -115,3 +115,14 @@ def save_raw_file(content: bytes, filename: str) -> tuple[str, Path]:
     dest = UPLOAD_DIR / f"{dataset_id}{ext}"
     dest.write_bytes(content)
     return dataset_id, dest
+
+
+def load_raw_file(dataset_id: str) -> tuple[bytes, str]:
+    matches = sorted(UPLOAD_DIR.glob(f"{dataset_id}.*"))
+    if not matches:
+        raise FileValidationError("Dataset tidak ditemukan atau sudah tidak tersedia.")
+    if len(matches) > 1:
+        raise FileValidationError("Dataset tidak valid karena ada file duplikat.")
+
+    path = matches[0]
+    return path.read_bytes(), path.suffix.lower()
