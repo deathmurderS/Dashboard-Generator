@@ -107,7 +107,6 @@ export default function UploadPreview() {
   const [status, setStatus]           = useState("idle");      // idle | detecting | sheet_select | scanning | ready | error
   const [fileMeta, setFileMeta]       = useState(null);
   const [fileObj, setFileObj]         = useState(null);
-  const [datasetId, setDatasetId]     = useState("");
   const [sheets, setSheets]           = useState([]);
   const [selectedSheets, setSelected] = useState([]);
   const [dashboards, setDashboards]   = useState([]);          // list hasil per sheet
@@ -139,13 +138,12 @@ export default function UploadPreview() {
 
     try {
       const info = await detectSheets(file);
-      setDatasetId(info.dataset_id || "");
       setSheets(info.sheets);
       setSelected(info.sheets); // default: semua dipilih
 
       if (!info.is_multi_sheet) {
         // CSV atau Excel 1 sheet — langsung proses
-        await processSheets(file, info.sheets, info.dataset_id || "");
+        await processSheets(file, info.sheets);
       } else {
         setStatus("sheet_select");
       }
@@ -156,16 +154,11 @@ export default function UploadPreview() {
   }, []);
 
   // ── Step 2: proses sheet terpilih ──
-  async function processSheets(file, sheetNames, currentDatasetId = datasetId) {
+  async function processSheets(file, sheetNames) {
     setStatus("scanning");
     try {
       const start = performance.now();
-      const results = await uploadSheets({
-        file: currentDatasetId ? null : file,
-        sheetNames,
-        datasetId: currentDatasetId,
-        filename: file?.name || fileMeta?.name || "",
-      });
+      const results = await uploadSheets(file, sheetNames);
       const elapsed = performance.now() - start;
       await new Promise((r) => setTimeout(r, Math.max(0, 400 - elapsed)));
       setDashboards(results);
@@ -190,7 +183,6 @@ export default function UploadPreview() {
 
   const reset = () => {
     setStatus("idle"); setFileMeta(null); setFileObj(null);
-    setDatasetId("");
     setSheets([]); setSelected([]); setDashboards([]);
     setActiveTab(0); setSaveStates({}); setError("");
     if (inputRef.current) inputRef.current.value = "";

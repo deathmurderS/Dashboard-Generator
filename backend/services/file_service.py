@@ -5,7 +5,6 @@ backend/services/file_service.py
 from __future__ import annotations
 
 import io
-import uuid
 from pathlib import Path
 
 import pandas as pd
@@ -13,10 +12,6 @@ import pandas as pd
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 MAX_FILE_SIZE_MB = 25
 MAX_ROWS = 50_000
-
-UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
 
 class FileValidationError(Exception):
     pass
@@ -107,22 +102,3 @@ def parse_dataset(content: bytes, ext: str, sheet_name=None) -> tuple[pd.DataFra
         df = df.iloc[:MAX_ROWS].copy()
 
     return df, was_truncated, original_row_count
-
-
-def save_raw_file(content: bytes, filename: str) -> tuple[str, Path]:
-    dataset_id = uuid.uuid4().hex[:12]
-    ext = Path(filename).suffix.lower()
-    dest = UPLOAD_DIR / f"{dataset_id}{ext}"
-    dest.write_bytes(content)
-    return dataset_id, dest
-
-
-def load_raw_file(dataset_id: str) -> tuple[bytes, str]:
-    matches = sorted(UPLOAD_DIR.glob(f"{dataset_id}.*"))
-    if not matches:
-        raise FileValidationError("Dataset tidak ditemukan atau sudah tidak tersedia.")
-    if len(matches) > 1:
-        raise FileValidationError("Dataset tidak valid karena ada file duplikat.")
-
-    path = matches[0]
-    return path.read_bytes(), path.suffix.lower()

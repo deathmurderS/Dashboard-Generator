@@ -1,7 +1,16 @@
 // frontend/services/api.js
 // Helper terpusat buat semua panggilan ke backend FastAPI.
+// Di production (Railway), API dan frontend satu domain - pakai relative URL.
 
-export const API_BASE_URL = import.meta?.env?.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL = (() => {
+  // Kalau di development, pake VITE_API_BASE_URL atau fallback localhost
+  if (import.meta?.env?.DEV) {
+    return import.meta?.env?.VITE_API_BASE_URL || "http://localhost:8000";
+  }
+  // Di production (Railway), API satu domain - kosongin aja
+  return "";
+})();
+
 const TOKEN_KEY = "dg_token";
 
 export class ApiError extends Error {
@@ -51,14 +60,14 @@ async function apiFetch(path, options = {}) {
     });
   } catch {
     throw new ApiError(
-      "Tidak bisa terhubung ke server. Pastikan backend berjalan di " + API_BASE_URL,
+      "Tidak bisa terhubung ke server. Pastikan backend berjalan.",
       0
     );
   }
   return handleResponse(res);
 }
 
-// ─── Auth ───────────────────────────────────────────────────────────────────
+// --- Auth ---
 
 export async function register({ email, password, name }) {
   return apiFetch("/api/auth/register", {
@@ -86,7 +95,7 @@ export function logout() {
   setToken(null);
 }
 
-// ─── Upload ─────────────────────────────────────────────────────────────────
+// --- Upload ---
 
 export async function detectSheets(file) {
   const formData = new FormData();
@@ -94,25 +103,20 @@ export async function detectSheets(file) {
   return apiFetch("/api/detect-sheets", { method: "POST", body: formData });
 }
 
-export async function uploadSheets({ file, sheetNames, datasetId, filename }) {
+export async function uploadSheets(file, sheetNames) {
   const formData = new FormData();
+  formData.append("file", file);
   formData.append("sheets", sheetNames.join(","));
-  if (datasetId) {
-    formData.append("dataset_id", datasetId);
-    formData.append("filename", filename || file?.name || "");
-  } else if (file) {
-    formData.append("file", file);
-  }
   return apiFetch("/api/upload", { method: "POST", body: formData });
 }
 
 /** @deprecated Pakai detectSheets + uploadSheets */
 export async function uploadDataset(file) {
-  const data = await uploadSheets({ file, sheetNames: [] });
+  const data = await uploadSheets(file, []);
   return Array.isArray(data) ? data[0] : data;
 }
 
-// ─── Dashboard CRUD ─────────────────────────────────────────────────────────
+// --- Dashboard CRUD ---
 
 export async function saveDashboard(dashboard, title) {
   return apiFetch("/api/dashboards", {
