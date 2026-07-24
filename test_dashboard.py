@@ -6,7 +6,7 @@ Simulasi data CCTV health check seperti di screenshot
 
 import pandas as pd
 import sys
-sys.path.insert(0, '/home/muzaz/code/Dashboard_Generator_2/backend')
+sys.path.insert(0, '/home/muzaz/code/Dashboard-Generator/backend')
 
 from analyzer.detector import detect_columns
 from analyzer.charts import generate_charts

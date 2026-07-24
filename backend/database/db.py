@@ -2,12 +2,18 @@
 backend/database/db.py
 
 Setup koneksi PostgreSQL pakai SQLAlchemy.
-Mendukung local Docker (port 5434) dan Railway PostgreSQL.
+Mendukung:
+  - Supabase (via DATABASE_URL) — production
+  - Docker PostgreSQL lokal (port 5434) — development fallback
+  - Railway PostgreSQL
+
+Auto-fallback: kalau Supabase tidak reachable (misal IPv6), pakai Docker lokal.
 """
 
 from __future__ import annotations
 
 import os
+import socket
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect, text
@@ -16,6 +22,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 load_dotenv()
 
 _DEFAULT_URL = "postgresql+psycopg2://postgres:postgres@localhost:5434/dashboard_generator"
+_LOCAL_URL = "postgresql+psycopg2://postgres:postgres@localhost:5434/dashboard_generator"
 
 
 def _normalize_database_url(url: str) -> str:
@@ -26,15 +33,65 @@ def _normalize_database_url(url: str) -> str:
     return url
 
 
-DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL", _DEFAULT_URL))
+def _check_host_reachable(host: str, port: int = 5432, timeout: int = 3) -> bool:
+    """Cek apakah host:port reachable (support IPv4 & IPv6)."""
+    for family in (socket.AF_INET6, socket.AF_INET):
+        try:
+            addrs = socket.getaddrinfo(host, port, family, socket.SOCK_STREAM)
+            for addr in addrs:
+                sock = socket.socket(family, socket.SOCK_STREAM)
+                sock.settimeout(timeout)
+                try:
+                    sock.connect(addr[4])
+                    sock.close()
+                    return True
+                except (socket.timeout, OSError):
+                    continue
+                finally:
+                    sock.close()
+        except socket.gaierror:
+            continue
+    return False
 
-_connect_args: dict = {}
+
+def _resolve_database_url() -> tuple[str, dict]:
+    """
+    Tentukan DATABASE_URL yang akan dipakai.
+    Prioritas:
+      1. DATABASE_URL dari .env (biasanya Supabase)
+      2. Kalau host-nya unreachable → fallback ke Docker lokal
+    """
+    primary_url = _normalize_database_url(os.getenv("DATABASE_URL", _DEFAULT_URL))
+    local_url = _LOCAL_URL
+
+    # Parse host dari URL
+    from urllib.parse import urlparse
+    parsed = urlparse(primary_url.replace("+psycopg2", ""))
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 5432
+
+    # Cek reachability
+    if _check_host_reachable(host, port):
+        print(f"[DB] Using primary: {host}:{port}")
+        return primary_url, {}
+
+    # Fallback ke lokal
+    print(f"[DB] {host}:{port} unreachable — falling back to localhost:5434")
+    return local_url, {}
+
+
+# ─── Resolve URL ─────────────────────────────────────────────────────────────
+DATABASE_URL, _connect_args = _resolve_database_url()
+
+# SSL config untuk Supabase / Railway
 if os.getenv("DATABASE_SSL", "").lower() in ("1", "true", "require"):
     _connect_args["sslmode"] = "require"
 elif "railway" in DATABASE_URL.lower():
     _connect_args["sslmode"] = "require"
+elif "supabase" in DATABASE_URL.lower():
+    _connect_args["sslmode"] = "require"
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=_connect_args)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=_connect_args or {})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
