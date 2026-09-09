@@ -6,6 +6,7 @@ import React, { useState, useRef, useCallback } from "react";
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line,
   PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ScatterChart, Scatter, AreaChart, Area,
 } from "recharts";
 import { toPng } from "html-to-image";
 import {
@@ -223,6 +224,105 @@ function DonutChartView({ spec }) {
 // ─── Trend chart — line + switch granularitas ────────────────────────────────
 const GRAN_LABELS = { minute: "Per menit", hour: "Per jam", day: "Per hari", week: "Per minggu" };
 
+function ScatterChartView({ spec }) {
+  const dataKey = getDataKey(spec.data);
+  const pointColor = spec.color ?? TOKENS.accent;
+  return (
+    <ResponsiveContainer>
+      <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+        <CartesianGrid stroke={TOKENS.border} strokeDasharray="3 3" />
+        <XAxis dataKey={dataKey} tick={{ fill: TOKENS.textMuted, fontSize: 11 }}
+          axisLine={{ stroke: TOKENS.border }} tickLine={false} type="number" />
+        <YAxis dataKey="value" tick={{ fill: TOKENS.textMuted, fontSize: 11 }}
+          axisLine={{ stroke: TOKENS.border }} tickLine={false} type="number" />
+        <Tooltip contentStyle={tooltipStyle} cursor={{ strokeDasharray: "3 3" }} />
+        <Scatter data={spec.data} fill={pointColor} fillOpacity={0.7} />
+      </ScatterChart>
+    </ResponsiveContainer>
+  );
+}
+
+function AreaChartView({ spec }) {
+  const dataKey = getDataKey(spec.data);
+  const areaColor = spec.color ?? TOKENS.accent;
+  return (
+    <ResponsiveContainer>
+      <AreaChart data={spec.data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+        <defs>
+          <linearGradient id={`grad_${spec.id}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={areaColor} stopOpacity={0.4} />
+            <stop offset="100%" stopColor={areaColor} stopOpacity={0.05} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid stroke={TOKENS.border} strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey={dataKey} tick={{ fill: TOKENS.textMuted, fontSize: 11 }}
+          axisLine={{ stroke: TOKENS.border }} tickLine={false} />
+        <YAxis tick={{ fill: TOKENS.textMuted, fontSize: 11 }} axisLine={false} tickLine={false} />
+        <Tooltip contentStyle={tooltipStyle} />
+        <Area type="monotone" dataKey="value" stroke={areaColor}
+          strokeWidth={2} fill={`url(#grad_${spec.id})`} />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+function HeatmapChartView({ spec }) {
+  const dataKey = getDataKey(spec.data);
+  const maxVal = Math.max(...spec.data.map((d) => d.value ?? 0), 1);
+  const minVal = Math.min(...spec.data.map((d) => d.value ?? 0), 0);
+
+  // Normalisasi warna dari biru (rendah) ke hijau (tinggi)
+  function getHeatColor(value) {
+    const t = (value - minVal) / (maxVal - minVal || 1);
+    const r = Math.round(45 + t * 30);
+    const g = Math.round(120 + t * 100);
+    const b = Math.round(200 - t * 100);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, height: "100%" }}>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(auto-fill, minmax(60px, 1fr))`,
+        gap: 4,
+        flex: 1,
+        overflow: "auto",
+      }}>
+        {spec.data.map((entry, i) => {
+          const label = entry[dataKey] ?? entry.name ?? entry.label ?? `Item ${i + 1}`;
+          const value = entry.value ?? 0;
+          return (
+            <div key={i} style={{
+              background: getHeatColor(value),
+              borderRadius: 6,
+              padding: "8px 6px",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              minHeight: 48,
+            }}>
+              <span style={{ color: "#fff", fontSize: 10, fontWeight: 600, textAlign: "center", wordBreak: "break-word" }}>
+                {String(label).slice(0, 12)}
+              </span>
+              <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>
+                {value.toLocaleString("id-ID")}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {/* Legend */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: TOKENS.textMuted }}>
+        <span>Rendah</span>
+        <div style={{
+          flex: 1, height: 6, borderRadius: 3,
+          background: `linear-gradient(to right, ${getHeatColor(minVal)}, ${getHeatColor(maxVal)})`,
+        }} />
+        <span>Tinggi</span>
+      </div>
+    </div>
+  );
+}
+
 function TrendChartView({ spec }) {
   const granularities = spec.granularities ?? { day: spec.data ?? [] };
   const available = ["minute", "hour", "day", "week"].filter(
@@ -284,6 +384,9 @@ const CHART_COMPONENTS = {
   stacked_bar: StackedBarChartView,
   donut: DonutChartView,
   trend: TrendChartView,
+  scatter: ScatterChartView,
+  area: AreaChartView,
+  heatmap: HeatmapChartView,
 };
 
 // ─── ChartCard: export + optional drag handle ────────────────────────────────

@@ -45,7 +45,6 @@ def detect_column_type(series: pd.Series) -> str:
     if len(sample) == 0:
         return "Category"
 
-    print(sample)
     if sample.empty:
         return "Category"
 

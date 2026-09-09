@@ -1,7 +1,9 @@
 import React, { useState, useRef, useCallback } from "react";
-import { Calendar, Hash, Type, Download, Pencil } from "lucide-react";
+import { Calendar, Hash, Type, Download, Pencil, Table2, Activity } from "lucide-react";
 import { toPng } from "html-to-image";
 import ChartGrid from "../charts/ChartGrid";
+import DataTable from "./DataTable";
+import DataQualityPanel from "./DataQualityPanel";
 import { reorderCharts } from "../services/api";
 import { TOKENS } from "./theme";
 import DashboardEditor from "./DashboardEditor";
@@ -55,6 +57,7 @@ export default function DashboardView({ dashboard, onUpdate }) {
   const [editMode, setEditMode] = useState(false);
   const [current, setCurrent] = useState(dashboard);
   const [exporting, setExporting] = useState(false);
+  const [dataTab, setDataTab] = useState("data"); // "data" | "quality"
   const dashboardRef = useRef(null);
 
   function handleUpdate(updated) {
@@ -170,6 +173,32 @@ export default function DashboardView({ dashboard, onUpdate }) {
 
         {columns.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* Tab toggle: Data | Kualitas */}
+            <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${TOKENS.border}`, paddingBottom: 8 }}>
+              <button onClick={() => setDataTab("data")} style={{
+                display: "flex", alignItems: "center", gap: 6,
+                background: dataTab === "data" ? TOKENS.accent + "18" : "transparent",
+                border: `1px solid ${dataTab === "data" ? TOKENS.accent : "transparent"}`,
+                borderRadius: 6, padding: "5px 14px",
+                color: dataTab === "data" ? TOKENS.accent : TOKENS.textMuted,
+                fontSize: 12, cursor: "pointer", fontWeight: dataTab === "data" ? 700 : 400,
+              }}>
+                <Table2 size={13} /> Data
+              </button>
+              {current?.id && (
+                <button onClick={() => setDataTab("quality")} style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  background: dataTab === "quality" ? TOKENS.accent + "18" : "transparent",
+                  border: `1px solid ${dataTab === "quality" ? TOKENS.accent : "transparent"}`,
+                  borderRadius: 6, padding: "5px 14px",
+                  color: dataTab === "quality" ? TOKENS.accent : TOKENS.textMuted,
+                  fontSize: 12, cursor: "pointer", fontWeight: dataTab === "quality" ? 700 : 400,
+                }}>
+                  <Activity size={13} /> Kualitas Data
+                </button>
+              )}
+            </div>
+
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
               {Object.entries(TYPE_META).map(([type, meta]) => (
                 <span key={type} style={{
@@ -183,68 +212,73 @@ export default function DashboardView({ dashboard, onUpdate }) {
                   {type}
                 </span>
               ))}
-              {current.total_rows > rows.length && (
-                <span style={{ color: TOKENS.textMuted, fontSize: 11, marginLeft: "auto" }}>
-                  Menampilkan {rows.length} dari {current.total_rows.toLocaleString("id-ID")} baris
-                </span>
-              )}
             </div>
 
-            <div style={{
-              background: TOKENS.panel, border: `1px solid ${TOKENS.border}`,
-              borderRadius: 10, overflow: "auto", maxHeight: 340,
-            }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
-                  <tr style={{ background: TOKENS.panelAlt }}>
-                    {columns.map((col) => {
-                      const meta = TYPE_META[col.type];
-                      const Icon = meta.icon;
-                      return (
-                        <th key={col.name} style={{
-                          borderBottom: `1px solid ${TOKENS.border}`,
-                          color: TOKENS.text, textAlign: "left",
-                          padding: "10px 14px", fontWeight: 600,
-                          whiteSpace: "nowrap",
-                        }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                            <Icon size={12} style={{ color: meta.color, flexShrink: 0 }} />
-                            {col.name}
-                          </div>
-                          <span style={{
-                            color: meta.color,
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 9, fontWeight: 400,
+            {dataTab === "quality" && current?.id ? (
+              <DataQualityPanel dashboardId={current.id} />
+            ) : current?.id ? (
+              <DataTable
+                dashboardId={current.id}
+                columns={columns}
+                totalRows={current.total_rows}
+              />
+            ) : (
+              <div style={{
+                background: TOKENS.panel, border: `1px solid ${TOKENS.border}`,
+                borderRadius: 10, overflow: "auto", maxHeight: 340,
+              }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
+                    <tr style={{ background: TOKENS.panelAlt }}>
+                      {columns.map((col) => {
+                        const meta = TYPE_META[col.type];
+                        const Icon = meta.icon;
+                        return (
+                          <th key={col.name} style={{
+                            borderBottom: `1px solid ${TOKENS.border}`,
+                            color: TOKENS.text, textAlign: "left",
+                            padding: "10px 14px", fontWeight: 600,
+                            whiteSpace: "nowrap",
                           }}>
-                            {meta.label}
-                          </span>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, i) => (
-                    <tr key={i} style={{
-                      borderBottom: `1px solid ${TOKENS.border}`,
-                      background: i % 2 === 0 ? "transparent" : TOKENS.panelAlt + "66",
-                    }}>
-                      {columns.map((col) => (
-                        <td key={col.name} style={{
-                          padding: "8px 14px",
-                          fontFamily: col.type === "Numeric" ? "'JetBrains Mono', monospace" : "inherit",
-                          color: TOKENS.text, whiteSpace: "nowrap",
-                        }}>
-                          {row[col.name] === null || row[col.name] === undefined
-                            ? <span style={{ color: TOKENS.textMuted }}>—</span>
-                            : String(row[col.name])}
-                        </td>
-                      ))}
+                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                              <Icon size={12} style={{ color: meta.color, flexShrink: 0 }} />
+                              {col.name}
+                            </div>
+                            <span style={{
+                              color: meta.color,
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 9, fontWeight: 400,
+                            }}>
+                              {meta.label}
+                            </span>
+                          </th>
+                        );
+                      })}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => (
+                      <tr key={i} style={{
+                        borderBottom: `1px solid ${TOKENS.border}`,
+                        background: i % 2 === 0 ? "transparent" : TOKENS.panelAlt + "66",
+                      }}>
+                        {columns.map((col) => (
+                          <td key={col.name} style={{
+                            padding: "8px 14px",
+                            fontFamily: col.type === "Numeric" ? "'JetBrains Mono', monospace" : "inherit",
+                            color: TOKENS.text, whiteSpace: "nowrap",
+                          }}>
+                            {row[col.name] === null || row[col.name] === undefined
+                              ? <span style={{ color: TOKENS.textMuted }}>—</span>
+                              : String(row[col.name])}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>

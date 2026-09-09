@@ -15,6 +15,9 @@ const CHART_TYPES = [
   { value: "trend",       label: "Trend Waktu",  desc: "Jumlah baris per menit/jam/hari/minggu" },
   { value: "hbar",        label: "H-Bar",        desc: "Batang horizontal + sortable" },
   { value: "stacked_bar", label: "Stacked Bar",  desc: "Batang bertumpuk (2 kategori)" },
+  { value: "scatter",     label: "Scatter",      desc: "Titik sebaran (2 kolom numerik)" },
+  { value: "area",        label: "Area",         desc: "Area tren dengan gradasi" },
+  { value: "heatmap",     label: "Heatmap",      desc: "Peta panas nilai" },
 ];
 
 const KPI_TYPES = [
@@ -624,13 +627,27 @@ function AddChartForm({ dashboard, onAdd, onClose }) {
       return { data, stack_categories: stackCategories };
     }
 
-    if (["pie", "donut"].includes(chartType) || !yCol) {
+    if (["pie", "donut", "heatmap"].includes(chartType) || !yCol) {
       const freq = {};
       rows.forEach((r) => { const k = String(r[xCol] ?? "—"); freq[k] = (freq[k] ?? 0) + 1; });
       return {
         data: Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([label, value]) => ({ label, value })),
         stack_categories: [],
       };
+    }
+
+    // Scatter: data point per baris (x = nilai kolom X, y = nilai kolom Y)
+    if (chartType === "scatter") {
+      const data = rows
+        .map((r) => {
+          const x = parseFloat(r[xCol]);
+          const y = parseFloat(r[yCol]);
+          if (isNaN(x) || isNaN(y)) return null;
+          return { label: x, value: y };
+        })
+        .filter(Boolean)
+        .slice(0, 200);
+      return { data, stack_categories: [] };
     }
 
     const agg = {};
@@ -686,7 +703,7 @@ function AddChartForm({ dashboard, onAdd, onClose }) {
     onClose();
   }
 
-  const needsY = ["bar", "line", "hbar"].includes(chartType);
+  const needsY = ["bar", "line", "hbar", "scatter", "area"].includes(chartType);
   const needsStack = chartType === "stacked_bar";
 
   return (

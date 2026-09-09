@@ -91,6 +91,14 @@ export async function fetchMe() {
   return apiFetch("/api/auth/me");
 }
 
+export async function updateMe(payload) {
+  return apiFetch("/api/auth/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function logout() {
   setToken(null);
 }
@@ -197,4 +205,47 @@ export async function updateChart(dashboardId, chartId, payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+// --- Data rows (pagination + search) ---
+
+export async function getDashboardRows(dashboardId, { page = 1, pageSize = 50, search = "", columnFilter = "" } = {}) {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("page_size", String(pageSize));
+  if (search) params.set("search", search);
+  if (columnFilter) params.set("column_filter", columnFilter);
+  return apiFetch(`/api/dashboards/${dashboardId}/rows?${params.toString()}`);
+}
+
+// --- Stats & data quality ---
+
+export async function getDashboardStats(dashboardId) {
+  return apiFetch(`/api/dashboards/${dashboardId}/stats`);
+}
+
+// --- Export ---
+
+export function getExportUrl(dashboardId, format = "csv") {
+  const token = getToken();
+  const base = API_BASE_URL;
+  const url = `${base}/api/dashboards/${dashboardId}/export/${format}`;
+  return token ? `${url}?token=${encodeURIComponent(token)}` : url;
+}
+
+export async function exportDashboard(dashboardId, format = "csv") {
+  const res = await fetch(getExportUrl(dashboardId, format), {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(data?.detail || "Gagal export data.", res.status);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `dashboard_${dashboardId}.${format}`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
