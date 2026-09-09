@@ -23,6 +23,7 @@ load_dotenv()
 
 _DEFAULT_URL = "postgresql+psycopg2://postgres:postgres@localhost:5434/dashboard_generator"
 _LOCAL_URL = "postgresql+psycopg2://postgres:postgres@localhost:5434/dashboard_generator"
+_SQLITE_URL = "sqlite:///./dashboard_generator.db"
 
 
 def _normalize_database_url(url: str) -> str:
@@ -60,6 +61,7 @@ def _resolve_database_url() -> tuple[str, dict]:
     Prioritas:
       1. DATABASE_URL dari .env (biasanya Supabase)
       2. Kalau host-nya unreachable → fallback ke Docker lokal
+      3. Kalau Docker lokal juga unreachable → fallback ke SQLite (dev)
     """
     primary_url = _normalize_database_url(os.getenv("DATABASE_URL", _DEFAULT_URL))
     local_url = _LOCAL_URL
@@ -70,14 +72,19 @@ def _resolve_database_url() -> tuple[str, dict]:
     host = parsed.hostname or "localhost"
     port = parsed.port or 5432
 
-    # Cek reachability
+    # Cek reachability primary
     if _check_host_reachable(host, port):
         print(f"[DB] Using primary: {host}:{port}")
         return primary_url, {}
 
-    # Fallback ke lokal
-    print(f"[DB] {host}:{port} unreachable — falling back to localhost:5434")
-    return local_url, {}
+    # Cek reachability Docker lokal (port 5434)
+    if _check_host_reachable("localhost", 5434):
+        print(f"[DB] {host}:{port} unreachable — falling back to localhost:5434")
+        return local_url, {}
+
+    # Fallback ke SQLite (development)
+    print(f"[DB] PostgreSQL unreachable — falling back to SQLite (development)")
+    return _SQLITE_URL, {"check_same_thread": False}
 
 
 # ─── Resolve URL ─────────────────────────────────────────────────────────────
@@ -108,8 +115,14 @@ def _migrate_schema() -> None:
         cols = {c["name"] for c in insp.get_columns("dashboards")}
         if "user_id" not in cols:
             with engine.begin() as conn:
+                # SQLite tidak support ALTER TABLE ADD COLUMN dengan tipe sama
+                # seperti PostgreSQL, tapi VARCHAR(12) didukung.
                 conn.execute(text("ALTER TABLE dashboards ADD COLUMN user_id VARCHAR(12)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dashboards_user_id ON dashboards (user_id)"))
+                try:
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_dashboards_user_id ON dashboards (user_id)"))
+                except Exception:
+                    # SQLite sudah buat index otomatis, atau index sudah ada
+                    pass
 
 
 def init_db() -> None:

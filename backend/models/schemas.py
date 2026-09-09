@@ -25,7 +25,7 @@ class KPICard(BaseModel):
     color: str | None = None
 
 
-CHART_TYPE = Literal["bar", "line", "pie", "hbar", "stacked_bar", "donut", "trend"]
+CHART_TYPE = Literal["bar", "line", "pie", "hbar", "stacked_bar", "donut", "trend", "scatter", "area", "heatmap"]
 
 
 class ChartSpec(BaseModel):
@@ -168,3 +168,12 @@ class UserResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UserUpdate(BaseModel):
+    """Body untuk PATCH /api/auth/me — update profil user."""
+
+    name: str | None = None
+    email: str | None = None
+    current_password: str | None = None
+    new_password: str | None = None
