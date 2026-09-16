@@ -51,7 +51,7 @@ Environment variables (`.env.local`):
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
-NEXT_PUBLIC_PROFILER_API_URL=http://localhost:8000   # optional FastAPI service
+NEXT_PUBLIC_API_URL=http://localhost:8000   # optional FastAPI service
 ```
 
 ### Supabase setup
