@@ -36,5 +36,7 @@ backend/venv/
 backend/__pycache__/
 backend/**/__pycache__/
 backend/.env
+backend/*.db
+*.sqlite3
 # Frontend build (built by Railway during deploy)
 frontend/dist/
