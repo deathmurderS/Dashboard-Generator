@@ -1,13 +1,20 @@
 /**
- * Visora FastAPI integration layer.
+ * Visora API integration layer.
  *
- * The Python service (visora/backend) performs deep profiling and chart
- * recommendation. Set NEXT_PUBLIC_API_URL in .env.local (defaults to
- * http://localhost:8000) and start it with:
- *   uvicorn main:app --reload --port 8000
+ * In production on Vercel, requests use relative paths (/api/...) directly.
+ * For local standalone development with external FastAPI server,
+ * NEXT_PUBLIC_API_URL can be set in .env.local (e.g. http://localhost:8000).
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+
+function getEndpoint(path: string): string {
+  if (!API_BASE) {
+    return path.startsWith('/api') ? path : `/api${path}`;
+  }
+  // When hitting an external standalone backend like http://localhost:8000
+  return `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+}
 
 /** One column as produced by the profiler / accepted by the recommender. */
 export interface ApiColumn {
@@ -45,11 +52,11 @@ export interface ChartRecommendation {
   fit_score: number;
 }
 
-/** POST /profiler/analyze — upload a CSV/XLSX file for deep profiling. */
+/** POST /api/profiler/analyze — upload a CSV/XLSX file for deep profiling. */
 export async function analyzeFile(file: File): Promise<ProfilerResult> {
   const formData = new FormData();
   formData.append('file', file);
-  const res = await fetch(`${API_URL}/profiler/analyze`, {
+  const res = await fetch(getEndpoint('/profiler/analyze'), {
     method: 'POST',
     body: formData,
   });
@@ -62,12 +69,12 @@ export async function analyzeFile(file: File): Promise<ProfilerResult> {
   return res.json();
 }
 
-/** POST /recommender/suggest — chart blueprints for a profiled schema. */
+/** POST /api/recommender/suggest — chart blueprints for a profiled schema. */
 export async function getRecommendations(
   columns: ApiColumn[],
   rowCount = 0
 ): Promise<ChartRecommendation[]> {
-  const res = await fetch(`${API_URL}/recommender/suggest`, {
+  const res = await fetch(getEndpoint('/recommender/suggest'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ columns, row_count: rowCount }),
@@ -79,10 +86,10 @@ export async function getRecommendations(
   return data.recommendations;
 }
 
-/** GET /health — service heartbeat. */
+/** GET /api/health — service heartbeat. */
 export async function checkBackendHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_URL}/health`, { cache: 'no-store' });
+    const res = await fetch(getEndpoint('/health'), { cache: 'no-store' });
     return res.ok;
   } catch {
     return false;
